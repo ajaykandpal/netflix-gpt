@@ -1,6 +1,15 @@
 import React, { useRef, useState } from "react";
 import Header from "./Header";
 import validateData from "../utils/validate";
+import {
+  createUserWithEmailAndPassword,
+  signInWithEmailAndPassword,
+  updateProfile,
+} from "firebase/auth";
+import { auth } from "../utils/firebase";
+import { useNavigate } from "react-router-dom";
+import { useDispatch } from "react-redux";
+import { addUser } from "../utils/userSlice";
 
 const Login = () => {
   const [isSignInForm, setIsSignInForm] = useState(true);
@@ -8,17 +17,85 @@ const Login = () => {
   const password = useRef(null);
   const fullName = useRef(null);
   const [errorMessage, setErrorMessage] = useState(null);
+  const navigate = useNavigate();
+  const dispatch = useDispatch();
+
   const toggleSignIn = () => {
     setIsSignInForm(!isSignInForm);
+    setErrorMessage(null);
   };
+
   const handleButtonClick = () => {
     //validate data
-    const isValidData = validateData(
-      email.current.value,
-      password.current.value
-    );
-    setErrorMessage(isValidData);
+    const message = validateData(email.current.value, password.current.value);
+    setErrorMessage(message);
     // console.log(email, password, isValidData);
+    if (message) return;
+    if (isSignInForm) {
+      //sign in
+      signInWithEmailAndPassword(
+        auth,
+        email.current.value,
+        password.current.value
+      )
+        .then((userCredential) => {
+          // Signed in
+          const user = userCredential.user;
+          console.log(user);
+          // ...
+          navigate("/browse");
+        })
+        .catch((error) => {
+          const errorCode = error.code;
+          const errorMessage = error.message;
+          setErrorMessage(errorCode + "-" + errorMessage);
+        });
+    } else {
+      //sign up
+
+      createUserWithEmailAndPassword(
+        auth,
+        email.current.value,
+        password.current.value
+      )
+        .then((userCredential) => {
+          // Signed up
+          const user = userCredential.user;
+          //adding extra fields
+          updateProfile(user, {
+            displayName: fullName.current.value,
+            photoURL: "https://avatars.githubusercontent.com/u/42905575?v=4",
+          })
+            .then(() => {
+              // Profile updated!
+              // ...
+              //updating store
+              const { uid, email, displayName, photoURL } = auth.currentUser;
+              dispatch(
+                addUser({
+                  uid: uid,
+                  email: email,
+                  displayName: displayName,
+                  photoURL: photoURL,
+                })
+              );
+              console.log(user);
+              // ...
+              navigate("/browse");
+            })
+            .catch((error) => {
+              // An error occurred
+              // ...
+              setErrorMessage(error.message + "Sign up");
+            });
+        })
+        .catch((error) => {
+          const errorCode = error.code;
+          const errorMessage = error.message;
+          setErrorMessage(errorCode + "-" + errorMessage);
+          // ..
+        });
+    }
   };
   return (
     <div>
@@ -36,12 +113,7 @@ const Login = () => {
         <h1 className=' font-bold text-3xl py-4'>
           {isSignInForm ? "Sign In" : "Sign Up"}
         </h1>
-        <input
-          type='text'
-          placeholder='Email'
-          ref={email}
-          className='p-2 my-2 w-full bg-gray-700'
-        />
+
         {!isSignInForm && (
           <input
             type='text'
@@ -50,6 +122,14 @@ const Login = () => {
             className='p-2 my-2 w-full bg-gray-700'
           />
         )}
+
+        <input
+          type='text'
+          placeholder='Email'
+          ref={email}
+          className='p-2 my-2 w-full bg-gray-700'
+        />
+
         <input
           type='password'
           placeholder='Password'
